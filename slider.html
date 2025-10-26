@@ -1,0 +1,228 @@
+<div style="
+    text-align: center;">
+  <h3>Join the community</h3>
+  <h2 class="h2">Let’s connect</h2>
+</div>
+<br>
+<div class="3d-slider">
+  <div id="3d-slider" class="dynamic-smart-slider">
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GUI } from "three/addons/libs/lil-gui.module.min.js";
+
+let scene, camera, renderer, controls;
+let sphereGroup;
+let params;
+let rotationAngle = 0;
+
+init();
+animate();
+
+function init() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xffffff);
+
+  camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 1, 100);
+  camera.position.set(0, 0, 16);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(devicePixelRatio);
+  renderer.setSize(innerWidth, innerHeight);
+  document.getElementById('3d-slider').appendChild(renderer.domElement);
+
+  // OrbitControls (commented out mouse interaction)
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  // Disable mouse/touch controls
+  controls.enableRotate = true;
+  controls.enableZoom = false;
+  controls.enablePan = false;
+  // (Alternatively, you can comment this line entirely to remove controls)
+  // controls = null;
+
+// Lock vertical rotation (X-axis) — allow only Y-axis (left-right)
+controls.minPolarAngle = Math.PI / 2; 
+controls.maxPolarAngle = Math.PI / 2;
+
+// Allow full horizontal rotation (Y-axis)
+controls.minAzimuthAngle = -Infinity;
+controls.maxAzimuthAngle = Infinity;
+
+  window.addEventListener("resize", onWindowResize);
+
+  // --- Default desktop parameters ---
+ 
+
+  // --- Mobile override (screen width < 769px) ---
+  if (window.innerWidth < 769) {
+    params = {
+      columns: 10,
+      rows: 9,
+      radius: 5,
+      heightScale: 1.4,
+      cameraZ: 30,
+      rotationSpeed: -0.001,
+      padding: 0.05,
+    };
+  } else{
+     params = {
+      columns: 20,
+      rows: 11,
+      radius: 5,
+      heightScale: 0.8,
+      cameraZ: 11,
+      rotationSpeed: -0.001,
+      padding: 0.04, // new padding parameter
+    };
+  }
+
+  camera.position.x = 0; // Example: moves 2 units right
+  camera.position.y = -0.5; // Example: moves 1 unit up
+  camera.position.z = params.cameraZ;
+
+  createSphere();
+  //setupGUI();
+}
+
+function createSphere() {
+  // Remove old sphere
+  if (sphereGroup) {
+    sphereGroup.children.forEach(m => {
+      m.geometry.dispose();
+      m.material.map?.dispose();
+      m.material.dispose();
+    });
+    scene.remove(sphereGroup);
+  }
+
+  sphereGroup = new THREE.Group();
+  scene.add(sphereGroup);
+
+  const loader = new THREE.TextureLoader();
+  const middleRow = Math.floor(params.rows / 2);
+  const total = params.columns;
+
+  for (let y = 0; y < params.rows; y++) {
+    // only middle row has images
+    if (y !== middleRow) continue;
+
+    const phiStart = (y / params.rows) * Math.PI;
+    const phiLength = Math.PI / params.rows;
+
+    for (let x = 0; x < params.columns; x++) {
+      const thetaStart = (x / params.columns) * Math.PI * 2;
+      const thetaLength = (Math.PI * 2) / params.columns;
+
+      const geo = new THREE.SphereGeometry(
+        params.radius,
+        16,
+        8,
+        thetaStart,
+        thetaLength,
+        phiStart,
+        phiLength
+      );
+      geo.scale(1, params.heightScale, 1);
+
+      const imgUrl = `https://picsum.photos/seed/${x + y * 10}/512/512`;
+      loader.load(imgUrl, (origTex) => {
+        const size = 512;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+
+        const pad = params.padding * size;
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, size, size);
+        ctx.drawImage(origTex.image, pad, pad, size - pad * 2, size - pad * 2);
+
+        const paddedTex = new THREE.CanvasTexture(canvas);
+        paddedTex.colorSpace = THREE.SRGBColorSpace;
+
+        const mat = new THREE.MeshBasicMaterial({
+          map: paddedTex,
+          side: THREE.DoubleSide,
+        });
+
+        const mesh = new THREE.Mesh(geo, mat);
+        sphereGroup.add(mesh);
+      });
+    }
+  }
+}
+
+function setupGUI() {
+  const gui = new GUI();
+  gui.title("Sphere Controls");
+
+  gui.add(params, "columns", 3, 20, 1).name("Columns").onChange(createSphere);
+  gui.add(params, "rows", 2, 15, 1).name("Rows").onChange(createSphere);
+  gui.add(params, "radius", 2, 15, 0.1).name("Sphere Radius").onChange(createSphere);
+  gui.add(params, "heightScale", 0.5, 2, 0.1).name("Height Scale").onChange(createSphere);
+  gui.add(params, "cameraZ", 5, 40, 0.5).name("Camera Distance").onChange(() => {
+    camera.position.z = params.cameraZ;
+  });
+  gui.add(params, "rotationSpeed", -0.02, 0.02, 0.001).name("Rotation Speed");
+  gui.add(params, "padding", 0, 0.4, 0.01).name("Image Padding").onChange(createSphere);
+}
+
+function onWindowResize() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  rotationAngle += params.rotationSpeed;
+  if (sphereGroup) sphereGroup.rotation.y = rotationAngle;
+
+  // controls.update(); // commented to avoid camera movement (if desired)
+  if (controls && controls.enabled) controls.update();
+
+  renderer.render(scene, camera);
+}
+</script>
+
+<style>
+@media(max-width:769px){
+.dynamic-smart-slider{
+   height: 250px !important;
+  
+   #3d-slider{
+  scale: 0.7 !important;
+  }
+}
+}
+canvas{
+  cursor:grab;
+}
+.dynamic-smart-slider{
+  scale: 1.01 !important;
+}
+.dynamic-smart-slider{
+  overflow: hidden;
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: center;
+      height: 719px;
+    rotate: -4deg;
+    justify-content: center;
+}
+</style>
